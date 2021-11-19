@@ -111,64 +111,70 @@ fn main() {
                     .collect::<Vec<_>>()
                     .join(" ")
             );
-            let file_id = track
-                .files
-                .get(&FileFormat::OGG_VORBIS_320)
-                // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
-                // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
-                .expect("Could not find a OGG_VORBIS_320 format for the track.");
-            let key = core
-                .block_on(session.audio_key().request(track.id, *file_id))
-                .expect("Cannot get audio key");
-            let mut encrypted_file = core
-                .block_on(AudioFile::open(&session, *file_id, 320, true))
-                .unwrap();
-            let mut buffer = Vec::new();
-            let mut read_all: Result<usize> = Ok(0);
-            let fetched = AtomicBool::new(false);
-            threadpool.scoped(|scope| {
-                scope.execute(|| {
-                    read_all = encrypted_file.read_to_end(&mut buffer);
-                    fetched.store(true, Ordering::Release);
-                });
-                while !fetched.load(Ordering::Acquire) {
-                    core.block_on(async { tokio::time::sleep(Duration::from_millis(100)).await });
-                    // core.turn(Some(Duration::from_millis(100)));
-                }
-            });
-            read_all.expect("Cannot read file stream");
-            let mut decrypted_buffer = Vec::new();
-            AudioDecrypt::new(key, &buffer[..])
-                .read_to_end(&mut decrypted_buffer)
-                .expect("Cannot decrypt stream");
-            if args.len() == 3 {
-                let ok_artists_name = clean_invalid_file_name_chars(&artists_strs.join(", "));
-                let ok_track_name = clean_invalid_file_name_chars(&track.name);
-                let fname = format!("{} - {}.ogg", ok_artists_name, ok_track_name);
-                std::fs::write(&fname, &decrypted_buffer[0xa7..])
-                    .expect("Cannot write decrypted track");
-                info!("Filename: {}", fname);
+            let ok_artists_name = clean_invalid_file_name_chars(&artists_strs.join(", "));
+            let ok_track_name = clean_invalid_file_name_chars(&track.name);
+            let fname = format!("{} - {}.ogg", ok_artists_name, ok_track_name);
+            if std::path::Path::new(&fname).exists() {
+                warn!("File \"{}\" already exists, download skipped.", fname);
             } else {
-                let album = core
-                    .block_on(Album::get(&session, track.album))
-                    .expect("Cannot get album metadata");
-                let mut cmd = Command::new(args[3].to_owned());
-                cmd.stdin(Stdio::piped());
-                cmd.arg(id.to_base62())
-                    .arg(track.name)
-                    .arg(album.name)
-                    .args(artists_strs.iter());
-                let mut child = cmd.spawn().expect("Could not run helper program");
-                let pipe = child.stdin.as_mut().expect("Could not open helper stdin");
-                pipe.write_all(&decrypted_buffer[0xa7..])
-                    .expect("Failed to write to stdin");
-                assert!(
-                    child
-                        .wait()
-                        .expect("Out of ideas for error messages")
-                        .success(),
-                    "Helper script returned an error"
-                );
+                let file_id = track
+                    .files
+                    .get(&FileFormat::OGG_VORBIS_320)
+                    // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
+                    // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
+                    .expect("Could not find a OGG_VORBIS_320 format for the track.");
+                let key = core
+                    .block_on(session.audio_key().request(track.id, *file_id))
+                    .expect("Cannot get audio key");
+                let mut encrypted_file = core
+                    .block_on(AudioFile::open(&session, *file_id, 320, true))
+                    .unwrap();
+                let mut buffer = Vec::new();
+                let mut read_all: Result<usize> = Ok(0);
+                let fetched = AtomicBool::new(false);
+                threadpool.scoped(|scope| {
+                    scope.execute(|| {
+                        read_all = encrypted_file.read_to_end(&mut buffer);
+                        fetched.store(true, Ordering::Release);
+                    });
+                    while !fetched.load(Ordering::Acquire) {
+                        core.block_on(async {
+                            tokio::time::sleep(Duration::from_millis(100)).await
+                        });
+                        // core.turn(Some(Duration::from_millis(100)));
+                    }
+                });
+                read_all.expect("Cannot read file stream");
+                let mut decrypted_buffer = Vec::new();
+                AudioDecrypt::new(key, &buffer[..])
+                    .read_to_end(&mut decrypted_buffer)
+                    .expect("Cannot decrypt stream");
+                if args.len() == 3 {
+                    std::fs::write(&fname, &decrypted_buffer[0xa7..])
+                        .expect("Cannot write decrypted track");
+                    info!("Filename: {}", fname);
+                } else {
+                    let album = core
+                        .block_on(Album::get(&session, track.album))
+                        .expect("Cannot get album metadata");
+                    let mut cmd = Command::new(args[3].to_owned());
+                    cmd.stdin(Stdio::piped());
+                    cmd.arg(id.to_base62())
+                        .arg(track.name)
+                        .arg(album.name)
+                        .args(artists_strs.iter());
+                    let mut child = cmd.spawn().expect("Could not run helper program");
+                    let pipe = child.stdin.as_mut().expect("Could not open helper stdin");
+                    pipe.write_all(&decrypted_buffer[0xa7..])
+                        .expect("Failed to write to stdin");
+                    assert!(
+                        child
+                            .wait()
+                            .expect("Out of ideas for error messages")
+                            .success(),
+                        "Helper script returned an error"
+                    );
+                }
             }
         });
 }
