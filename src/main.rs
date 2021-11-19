@@ -142,7 +142,9 @@ fn main() {
                 .read_to_end(&mut decrypted_buffer)
                 .expect("Cannot decrypt stream");
             if args.len() == 3 {
-                let fname = format!("{} - {}.ogg", artists_strs.join(", "), track.name);
+                let ok_artists_name = clean_invalid_file_name_chars(&artists_strs.join(", "));
+                let ok_track_name = clean_invalid_file_name_chars(&track.name);
+                let fname = format!("{} - {}.ogg", ok_artists_name, ok_track_name);
                 std::fs::write(&fname, &decrypted_buffer[0xa7..])
                     .expect("Cannot write decrypted track");
                 info!("Filename: {}", fname);
@@ -169,4 +171,12 @@ fn main() {
                 );
             }
         });
+}
+
+fn clean_invalid_file_name_chars(name: &String) -> String {
+    let invalid_file_name_chars = r"[/]";
+    Regex::new(invalid_file_name_chars)
+        .unwrap()
+        .replace_all(name.as_str(), "_")
+        .into_owned()
 }
