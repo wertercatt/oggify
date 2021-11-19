@@ -114,9 +114,9 @@ fn main() {
             let file_id = track
                 .files
                 .get(&FileFormat::OGG_VORBIS_320)
-                .or(track.files.get(&FileFormat::OGG_VORBIS_160))
-                .or(track.files.get(&FileFormat::OGG_VORBIS_96))
-                .expect("Could not find a OGG_VORBIS format for the track.");
+                // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
+                // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
+                .expect("Could not find a OGG_VORBIS_320 format for the track.");
             let key = core
                 .block_on(session.audio_key().request(track.id, *file_id))
                 .expect("Cannot get audio key");
