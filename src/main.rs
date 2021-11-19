@@ -9,9 +9,8 @@ extern crate scoped_threadpool;
 extern crate tokio;
 
 use std::env;
-use std::io::Write;
 use std::io::{self, BufRead, Read, Result};
-use std::process::{Command, Stdio};
+use std::process::{Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -149,32 +148,20 @@ fn main() {
                 AudioDecrypt::new(key, &buffer[..])
                     .read_to_end(&mut decrypted_buffer)
                     .expect("Cannot decrypt stream");
-                if args.len() == 3 {
-                    std::fs::write(&fname, &decrypted_buffer[0xa7..])
-                        .expect("Cannot write decrypted track");
-                    info!("Filename: {}", fname);
-                } else {
-                    let album = core
-                        .block_on(Album::get(&session, track.album))
-                        .expect("Cannot get album metadata");
-                    let mut cmd = Command::new(args[3].to_owned());
-                    cmd.stdin(Stdio::piped());
-                    cmd.arg(id.to_base62())
-                        .arg(track.name)
-                        .arg(album.name)
-                        .args(artists_strs.iter());
-                    let mut child = cmd.spawn().expect("Could not run helper program");
-                    let pipe = child.stdin.as_mut().expect("Could not open helper stdin");
-                    pipe.write_all(&decrypted_buffer[0xa7..])
-                        .expect("Failed to write to stdin");
-                    assert!(
-                        child
-                            .wait()
-                            .expect("Out of ideas for error messages")
-                            .success(),
-                        "Helper script returned an error"
-                    );
-                }
+                std::fs::write(&fname, &decrypted_buffer[0xa7..])
+                    .expect("Cannot write decrypted track");
+                info!("Filename: {}", fname);
+                let album = core
+                    .block_on(Album::get(&session, track.album))
+                    .expect("Cannot get album metadata");
+                Command::new("vorbiscomment")
+                    .arg("--append")
+                    .args(["--tag", &format!("TITLE={}", track.name)])
+                    .args(["--tag", &format!("ARTIST={}", artists_strs.join(", "))])
+                    .args(["--tag", &format!("ALBUM={}", album.name)])
+                    .arg(fname)
+                    .spawn()
+                    .expect("Failed to tag file with vorbiscomment.");
             }
         });
 }
