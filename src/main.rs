@@ -30,10 +30,10 @@ fn main() {
 
     maybe_info_and_exit(&args);
 
+    let input_reader = get_file_reader(&args[3].to_owned());
+
     let runtime = get_runtime();
     let session = get_session(&runtime, args[1].to_owned(), args[2].to_owned());
-
-    let input_reader = get_file_reader(&args[3].to_owned());
 
     let track_id_list = url_uri_to_track_id_list(&runtime, &session, input_reader);
 
