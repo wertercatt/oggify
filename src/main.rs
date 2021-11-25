@@ -36,6 +36,8 @@ fn main() {
 
     let spotify_track_uri = Regex::new(r"spotify:track:([[:alnum:]]+)").unwrap();
     let spotify_track_url = Regex::new(r"open\.spotify\.com/track/([[:alnum:]]+)").unwrap();
+    let spotify_album_uri = Regex::new(r"spotify:album:([[:alnum:]]+)").unwrap();
+    let spotify_album_url = Regex::new(r"open\.spotify\.com/album/([[:alnum:]]+)").unwrap();
     let spotify_playlist_uri = Regex::new(r"spotify:playlist:([[:alnum:]]+)").unwrap();
     let spotify_playlist_url = Regex::new(r"open\.spotify\.com/playlist/([[:alnum:]]+)").unwrap();
 
@@ -47,6 +49,8 @@ fn main() {
 
         let track_url_captures = spotify_track_url.captures(&line);
         let track_uri_captures = spotify_track_uri.captures(&line);
+        let album_url_captures = spotify_album_url.captures(&line);
+        let album_uri_captures = spotify_album_uri.captures(&line);
         let playlist_url_captures = spotify_playlist_url.captures(&line);
         let playlist_uri_captures = spotify_playlist_uri.captures(&line);
 
@@ -56,6 +60,26 @@ fn main() {
         } else if track_uri_captures.is_some() {
             let captures = track_uri_captures.unwrap();
             tracks_id.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
+        } else if album_url_captures.is_some() {
+            let captures = album_url_captures.unwrap();
+            let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
+            let album =
+                runtime
+                    .block_on(Album::get(&session, album_id))
+                    .expect("Cannot get album metadata.");
+            for track_id in album.tracks.into_iter() {
+                tracks_id.push(track_id)
+            }
+        } else if album_uri_captures.is_some() {
+            let captures = album_uri_captures.unwrap();
+            let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
+            let album =
+                runtime
+                    .block_on(Album::get(&session, album_id))
+                    .expect("Cannot get album metadata.");
+            for track_id in album.tracks.into_iter() {
+                tracks_id.push(track_id)
+            }
         } else if playlist_url_captures.is_some() {
             let captures = playlist_url_captures.unwrap();
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
