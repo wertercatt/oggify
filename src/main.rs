@@ -30,13 +30,14 @@ fn main() {
         args[0]
     );
 
-    let core = tokio::runtime::Runtime::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
     let session_config = SessionConfig::default();
     let credentials = Credentials::with_password(args[1].to_owned(), args[2].to_owned());
     info!("Connecting ...");
-    let session = core
-        .block_on(Session::connect(session_config, credentials, None))
-        .unwrap();
+    let session =
+        runtime
+            .block_on(Session::connect(session_config, credentials, None))
+            .unwrap();
     info!("Connected!");
 
     let spotify_track_uri = Regex::new(r"spotify:track:([[:alnum:]]+)").unwrap();
@@ -64,18 +65,20 @@ fn main() {
         } else if playlist_url_captures.is_some() {
             let captures = playlist_url_captures.unwrap();
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist = core
-                .block_on(Playlist::get(&session, playlist_id))
-                .expect("Cannot get playlist metadata.");
+            let playlist =
+                runtime
+                    .block_on(Playlist::get(&session, playlist_id))
+                    .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
                 tracks_id.push(track_id)
             }
         } else if playlist_uri_captures.is_some() {
             let captures = playlist_uri_captures.unwrap();
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist = core
-                .block_on(Playlist::get(&session, playlist_id))
-                .expect("Cannot get playlist metadata.");
+            let playlist =
+                runtime
+                    .block_on(Playlist::get(&session, playlist_id))
+                    .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
                 tracks_id.push(track_id)
             }
@@ -86,18 +89,20 @@ fn main() {
 
     tracks_id.iter().for_each(|id| {
         info!("Getting track {}...", id.to_base62());
-        let mut track = core
-            .block_on(Track::get(&session, *id))
-            .expect("Cannot get track metadata");
+        let mut track =
+            runtime
+                .block_on(Track::get(&session, *id))
+                .expect("Cannot get track metadata");
         if !track.available {
             warn!(
                 "Track {} is not available, finding alternative...",
                 id.to_base62()
             );
             let alt_track = track.alternatives.iter().find_map(|id| {
-                let alt_track = core
-                    .block_on(Track::get(&session, *id))
-                    .expect("Cannot get track metadata");
+                let alt_track =
+                    runtime
+                        .block_on(Track::get(&session, *id))
+                        .expect("Cannot get track metadata");
                 match alt_track.available {
                     true => Some(alt_track),
                     false => None,
@@ -117,15 +122,15 @@ fn main() {
             .artists
             .iter()
             .map(|id| {
-                core.block_on(Artist::get(&session, *id))
+                runtime
+                    .block_on(Artist::get(&session, *id))
                     .expect("Cannot get artist metadata")
                     .name
             })
             .collect();
         debug!(
             "File formats: {}",
-            track
-                .files
+            track.files
                 .keys()
                 .map(|filetype| format!("{:?}", filetype))
                 .collect::<Vec<_>>()
@@ -137,18 +142,20 @@ fn main() {
         if std::path::Path::new(&fname).exists() {
             warn!("File \"{}\" already exists, download skipped.", fname);
         } else {
-            let file_id = track
-                .files
-                .get(&FileFormat::OGG_VORBIS_320)
-                // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
-                // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
-                .expect("Could not find a OGG_VORBIS_320 format for the track.");
-            let key = core
-                .block_on(session.audio_key().request(track.id, *file_id))
-                .expect("Cannot get audio key");
-            let mut encrypted_file = core
-                .block_on(AudioFile::open(&session, *file_id, 320, true))
-                .unwrap();
+            let file_id =
+                track.files
+                    .get(&FileFormat::OGG_VORBIS_320)
+                    // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
+                    // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
+                    .expect("Could not find a OGG_VORBIS_320 format for the track.");
+            let key =
+                runtime
+                    .block_on(session.audio_key().request(track.id, *file_id))
+                    .expect("Cannot get audio key");
+            let mut encrypted_file =
+                runtime
+                    .block_on(AudioFile::open(&session, *file_id, 320, true))
+                    .unwrap();
             let mut buffer = Vec::new();
             let _read_all = encrypted_file.read_to_end(&mut buffer);
             let mut decrypted_buffer = Vec::new();
@@ -158,9 +165,10 @@ fn main() {
             std::fs::write(&fname, &decrypted_buffer[0xa7..])
                 .expect("Cannot write decrypted track");
             info!("Filename: {}", fname);
-            let album = core
-                .block_on(Album::get(&session, track.album))
-                .expect("Cannot get album metadata");
+            let album =
+                runtime
+                    .block_on(Album::get(&session, track.album))
+                    .expect("Cannot get album metadata");
             Command::new("vorbiscomment")
                 .arg("--append")
                 .args(["--tag", &format!("TITLE={}", track.name)])
