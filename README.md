@@ -11,7 +11,7 @@ The code is kind of ugly, it has been written by Rust newbies only 😁
 To download tracks as `"artists" - "title".ogg`, run:
 
 ```
-oggify "spotify-premium-user" "spotify-premium-password" < tracks_list
+oggify "spotify-premium-user" "spotify-premium-password" urls_list
 ```
 
 Oggify reads from stdin and looks for a track URL or URI in each line. The two formats are those you get with the track menu items "Share->Copy Song Link" or "Share->Copy Song URI" in the Spotify client, for example `open.spotify.com/track/1xPQDRSXDN5QJWm7qHg5Ku` or `spotify:track:1xPQDRSXDN5QJWm7qHg5Ku`.

@@ -9,7 +9,8 @@ extern crate tokio;
 
 use std::process;
 use std::env;
-use std::io::{self, BufRead, BufReader, Read};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
 use std::process::Command;
 
 use env_logger::{Builder, Env};
@@ -32,7 +33,7 @@ fn main() {
     let runtime = get_runtime();
     let session = get_session(&runtime, args[1].to_owned(), args[2].to_owned());
 
-    let input_reader = get_input_reader();
+    let input_reader = get_file_reader(&args[3].to_owned());
 
     let track_id_list = url_uri_to_track_id_list(&runtime, &session, input_reader);
 
@@ -42,8 +43,8 @@ fn main() {
 }
 
 fn maybe_info_and_exit(args: &Vec<String>) {
-    if args.len() != 3 {
-        info!("Usage: oggify USER PASSWORD < TRACK_FILE");
+    if args.len() != 4 {
+        info!("Usage: oggify USER PASSWORD TRACK_FILE");
         process::exit(0);
     }
 }
@@ -63,14 +64,21 @@ fn get_session(runtime: &Runtime, user: String, password: String) -> Session {
     session
 }
 
-fn get_input_reader() -> BufReader<std::io::Stdin> {
-    BufReader::new(io::stdin())
+fn get_file_reader(file_name: &String) -> BufReader<std::fs::File> {
+    let some_file = File::open(file_name);
+    match some_file {
+         Ok(file) => BufReader::new(file),
+         Err(_) => {
+             info!("File {} not found.", file_name);
+             process::exit(0);
+         }
+     }
 }
 
 fn url_uri_to_track_id_list(
     runtime: &Runtime,
     session: &Session,
-    input_reader: BufReader<std::io::Stdin>,
+    input_reader: BufReader<std::fs::File>,
 ) -> Vec<SpotifyId> {
     let spotify_track_uri = Regex::new(r"spotify:track:([[:alnum:]]+)").unwrap();
     let spotify_track_url = Regex::new(r"open\.spotify\.com/track/([[:alnum:]]+)").unwrap();
