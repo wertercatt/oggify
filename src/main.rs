@@ -29,8 +29,8 @@ fn main() {
 
     let args: Vec<_> = env::args().collect();
     assert!(
-        args.len() == 3 || args.len() == 4,
-        "Usage: {} user password [helper_script] < tracks_file",
+        args.len() == 3,
+        "Usage: {} user password < tracks_file",
         args[0]
     );
 
