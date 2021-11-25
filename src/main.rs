@@ -34,6 +34,39 @@ fn main() {
     let runtime = get_runtime();
     let session = get_session(&runtime, args[1].to_owned(), args[2].to_owned());
 
+    let input_reader = get_input_reader();
+
+    let track_id_list = url_uri_to_track_id_list(&runtime, &session, input_reader);
+
+    track_id_list
+        .iter()
+        .for_each(|id| download_track(&runtime, &session, *id));
+}
+
+fn get_runtime() -> Runtime {
+    Runtime::new().unwrap()
+}
+
+fn get_session(runtime: &Runtime, user: String, password: String) -> Session {
+    let session_config = SessionConfig::default();
+    let credentials = Credentials::with_password(user, password);
+    info!("Connecting ...");
+    let session = runtime
+        .block_on(Session::connect(session_config, credentials, None))
+        .unwrap();
+    info!("Connected!");
+    session
+}
+
+fn get_input_reader() -> BufReader<std::io::Stdin> {
+    BufReader::new(io::stdin())
+}
+
+fn url_uri_to_track_id_list(
+    runtime: &Runtime,
+    session: &Session,
+    input_reader: BufReader<std::io::Stdin>,
+) -> Vec<SpotifyId> {
     let spotify_track_uri = Regex::new(r"spotify:track:([[:alnum:]]+)").unwrap();
     let spotify_track_url = Regex::new(r"open\.spotify\.com/track/([[:alnum:]]+)").unwrap();
     let spotify_album_uri = Regex::new(r"spotify:album:([[:alnum:]]+)").unwrap();
@@ -41,10 +74,9 @@ fn main() {
     let spotify_playlist_uri = Regex::new(r"spotify:playlist:([[:alnum:]]+)").unwrap();
     let spotify_playlist_url = Regex::new(r"open\.spotify\.com/playlist/([[:alnum:]]+)").unwrap();
 
-    let reader = BufReader::new(io::stdin());
-    let mut tracks_id: Vec<SpotifyId> = vec![];
+    let mut track_id_list: Vec<SpotifyId> = vec![];
 
-    for (_index, line) in reader.lines().enumerate() {
+    for (_index, line) in input_reader.lines().enumerate() {
         let line = line.unwrap();
 
         let track_url_captures = spotify_track_url.captures(&line);
@@ -56,163 +88,143 @@ fn main() {
 
         if track_url_captures.is_some() {
             let captures = track_url_captures.unwrap();
-            tracks_id.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
+            track_id_list.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
         } else if track_uri_captures.is_some() {
             let captures = track_uri_captures.unwrap();
-            tracks_id.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
+            track_id_list.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
         } else if album_url_captures.is_some() {
             let captures = album_url_captures.unwrap();
             let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let album =
-                runtime
-                    .block_on(Album::get(&session, album_id))
-                    .expect("Cannot get album metadata.");
+            let album = runtime
+                .block_on(Album::get(&session, album_id))
+                .expect("Cannot get album metadata.");
             for track_id in album.tracks.into_iter() {
-                tracks_id.push(track_id)
+                track_id_list.push(track_id)
             }
         } else if album_uri_captures.is_some() {
             let captures = album_uri_captures.unwrap();
             let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let album =
-                runtime
-                    .block_on(Album::get(&session, album_id))
-                    .expect("Cannot get album metadata.");
+            let album = runtime
+                .block_on(Album::get(&session, album_id))
+                .expect("Cannot get album metadata.");
             for track_id in album.tracks.into_iter() {
-                tracks_id.push(track_id)
+                track_id_list.push(track_id)
             }
         } else if playlist_url_captures.is_some() {
             let captures = playlist_url_captures.unwrap();
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist =
-                runtime
-                    .block_on(Playlist::get(&session, playlist_id))
-                    .expect("Cannot get playlist metadata.");
+            let playlist = runtime
+                .block_on(Playlist::get(&session, playlist_id))
+                .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
-                tracks_id.push(track_id)
+                track_id_list.push(track_id)
             }
         } else if playlist_uri_captures.is_some() {
             let captures = playlist_uri_captures.unwrap();
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist =
-                runtime
-                    .block_on(Playlist::get(&session, playlist_id))
-                    .expect("Cannot get playlist metadata.");
+            let playlist = runtime
+                .block_on(Playlist::get(&session, playlist_id))
+                .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
-                tracks_id.push(track_id)
+                track_id_list.push(track_id)
             }
         } else {
             warn!("Line \"{}\" is not a valid URL/URI.", line);
         }
     }
+    track_id_list
+}
 
-    tracks_id.iter().for_each(|id| {
-        info!("Getting track {}...", id.to_base62());
-        let mut track =
-            runtime
+fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) {
+    info!("Getting track {}...", id.to_base62());
+    let mut track = runtime
+        .block_on(Track::get(&session, id))
+        .expect("Cannot get track metadata");
+    if !track.available {
+        warn!(
+            "Track {} is not available, finding alternative...",
+            id.to_base62()
+        );
+        let alt_track = track.alternatives.iter().find_map(|id| {
+            let alt_track = runtime
                 .block_on(Track::get(&session, *id))
                 .expect("Cannot get track metadata");
-        if !track.available {
-            warn!(
-                "Track {} is not available, finding alternative...",
-                id.to_base62()
-            );
-            let alt_track = track.alternatives.iter().find_map(|id| {
-                let alt_track =
-                    runtime
-                        .block_on(Track::get(&session, *id))
-                        .expect("Cannot get track metadata");
-                match alt_track.available {
-                    true => Some(alt_track),
-                    false => None,
-                }
-            });
-            track = alt_track.expect(&format!(
-                "Could not find alternative for track {}",
-                id.to_base62()
-            ));
-            warn!(
-                "Found track alternative {} -> {}",
-                id.to_base62(),
-                track.id.to_base62()
-            );
-        }
-        let artists_strs: Vec<_> = track
-            .artists
-            .iter()
-            .map(|id| {
-                runtime
-                    .block_on(Artist::get(&session, *id))
-                    .expect("Cannot get artist metadata")
-                    .name
-            })
-            .collect();
-        debug!(
-            "File formats: {}",
-            track.files
-                .keys()
-                .map(|filetype| format!("{:?}", filetype))
-                .collect::<Vec<_>>()
-                .join(" ")
+            match alt_track.available {
+                true => Some(alt_track),
+                false => None,
+            }
+        });
+        track = alt_track.expect(&format!(
+            "Could not find alternative for track {}",
+            id.to_base62()
+        ));
+        warn!(
+            "Found track alternative {} -> {}",
+            id.to_base62(),
+            track.id.to_base62()
         );
-        let ok_artists_name = clean_invalid_file_name_chars(&artists_strs.join(", "));
-        let ok_track_name = clean_invalid_file_name_chars(&track.name);
-        let fname = format!("{} - {}.ogg", ok_artists_name, ok_track_name);
-        if std::path::Path::new(&fname).exists() {
-            warn!("File \"{}\" already exists, download skipped.", fname);
-        } else {
-            let file_id =
-                track.files
-                    .get(&FileFormat::OGG_VORBIS_320)
-                    // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
-                    // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
-                    .expect("Could not find a OGG_VORBIS_320 format for the track.");
-            let key =
-                runtime
-                    .block_on(session.audio_key().request(track.id, *file_id))
-                    .expect("Cannot get audio key");
-            let mut encrypted_file =
-                runtime
-                    .block_on(AudioFile::open(&session, *file_id, 320, true))
-                    .unwrap();
-            let mut buffer = Vec::new();
-            let _read_all = encrypted_file.read_to_end(&mut buffer);
-            let mut decrypted_buffer = Vec::new();
-            AudioDecrypt::new(key, &buffer[..])
-                .read_to_end(&mut decrypted_buffer)
-                .expect("Cannot decrypt stream");
-            std::fs::write(&fname, &decrypted_buffer[0xa7..])
-                .expect("Cannot write decrypted track");
-            info!("Filename: {}", fname);
-            let album =
-                runtime
-                    .block_on(Album::get(&session, track.album))
-                    .expect("Cannot get album metadata");
-            Command::new("vorbiscomment")
-                .arg("--append")
-                .args(["--tag", &format!("TITLE={}", track.name)])
-                .args(["--tag", &format!("ARTIST={}", artists_strs.join(", "))])
-                .args(["--tag", &format!("ALBUM={}", album.name)])
-                .arg(fname)
-                .spawn()
-                .expect("Failed to tag file with vorbiscomment.");
-        }
-    });
-}
-
-fn get_runtime() -> Runtime {
-    Runtime::new().unwrap()
-}
-
-fn get_session(runtime: &Runtime, user: String, password: String) -> Session {
-    let session_config = SessionConfig::default();
-    let credentials = Credentials::with_password(user, password);
-    info!("Connecting ...");
-    let session =
-        runtime
-            .block_on(Session::connect(session_config, credentials, None))
+    }
+    let artists_strs: Vec<_> = track
+        .artists
+        .iter()
+        .map(|id| {
+            runtime
+                .block_on(Artist::get(&session, *id))
+                .expect("Cannot get artist metadata")
+                .name
+        })
+        .collect();
+    debug!(
+        "File formats: {}",
+        track
+            .files
+            .keys()
+            .map(|filetype| format!("{:?}", filetype))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    let ok_artists_name = clean_invalid_file_name_chars(&artists_strs.join(", "));
+    let ok_track_name = clean_invalid_file_name_chars(&track.name);
+    let file_name = format!("{} - {}.ogg", ok_artists_name, ok_track_name);
+    if std::path::Path::new(&file_name).exists() {
+        warn!("File \"{}\" already exists, download skipped.", file_name);
+    } else {
+        let file_id = track
+            .files
+            .get(&FileFormat::OGG_VORBIS_320)
+            // .or(track.files.get(&FileFormat::OGG_VORBIS_160))
+            // .or(track.files.get(&FileFormat::OGG_VORBIS_96))
+            .expect("Could not find a OGG_VORBIS_320 format for the track.");
+        let key = runtime
+            .block_on(session.audio_key().request(track.id, *file_id))
+            .expect("Cannot get audio key");
+        let mut encrypted_file = runtime
+            .block_on(AudioFile::open(&session, *file_id, 320, true))
             .unwrap();
-    info!("Connected!");
-    session
+        let mut buffer = Vec::new();
+        let _read_all = encrypted_file.read_to_end(&mut buffer);
+        let mut decrypted_buffer = Vec::new();
+        AudioDecrypt::new(key, &buffer[..])
+            .read_to_end(&mut decrypted_buffer)
+            .expect("Cannot decrypt stream");
+        std::fs::write(&file_name, &decrypted_buffer[0xa7..]).expect("Cannot write decrypted track");
+        info!("Filename: {}", file_name);
+        let album = runtime
+            .block_on(Album::get(&session, track.album))
+            .expect("Cannot get album metadata");
+        tag_file(file_name, track.name, album.name, artists_strs.join(", "));
+    }
+}
+
+fn tag_file(file_name: String, title: String, album: String, artists: String) {
+    Command::new("vorbiscomment")
+        .arg("--append")
+        .args(["--tag", &format!("TITLE={}", title)])
+        .args(["--tag", &format!("ALBUM={}", album)])
+        .args(["--tag", &format!("ARTIST={}", artists)])
+        .arg(file_name)
+        .spawn()
+        .expect("Failed to tag file with vorbiscomment.");
 }
 
 fn clean_invalid_file_name_chars(name: &String) -> String {
