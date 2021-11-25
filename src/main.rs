@@ -5,14 +5,11 @@ extern crate librespot_metadata;
 #[macro_use]
 extern crate log;
 extern crate regex;
-extern crate scoped_threadpool;
 extern crate tokio;
 
 use std::env;
-use std::io::{self, BufRead, Read, Result};
+use std::io::{self, BufRead, Read};
 use std::process::{Command};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 
 use env_logger::{Builder, Env};
 use librespot_audio::{AudioDecrypt, AudioFile};
@@ -22,7 +19,6 @@ use librespot_core::session::Session;
 use librespot_core::spotify_id::SpotifyId;
 use librespot_metadata::{Album, Artist, FileFormat, Metadata, Track};
 use regex::Regex;
-use scoped_threadpool::Pool;
 
 fn main() {
     Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -42,8 +38,6 @@ fn main() {
         .block_on(Session::connect(session_config, credentials, None))
         .unwrap();
     info!("Connected!");
-
-    let mut threadpool = Pool::new(1);
 
     let spotify_uri = Regex::new(r"spotify:track:([[:alnum:]]+)").unwrap();
     let spotify_url = Regex::new(r"open\.spotify\.com/track/([[:alnum:]]+)").unwrap();
@@ -129,21 +123,7 @@ fn main() {
                     .block_on(AudioFile::open(&session, *file_id, 320, true))
                     .unwrap();
                 let mut buffer = Vec::new();
-                let mut read_all: Result<usize> = Ok(0);
-                let fetched = AtomicBool::new(false);
-                threadpool.scoped(|scope| {
-                    scope.execute(|| {
-                        read_all = encrypted_file.read_to_end(&mut buffer);
-                        fetched.store(true, Ordering::Release);
-                    });
-                    while !fetched.load(Ordering::Acquire) {
-                        core.block_on(async {
-                            tokio::time::sleep(Duration::from_millis(100)).await
-                        });
-                        // core.turn(Some(Duration::from_millis(100)));
-                    }
-                });
-                read_all.expect("Cannot read file stream");
+                let _read_all = encrypted_file.read_to_end(&mut buffer);
                 let mut decrypted_buffer = Vec::new();
                 AudioDecrypt::new(key, &buffer[..])
                     .read_to_end(&mut decrypted_buffer)
