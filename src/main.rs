@@ -7,6 +7,7 @@ extern crate log;
 extern crate regex;
 extern crate tokio;
 
+use std::process;
 use std::env;
 use std::io::{self, BufRead, BufReader, Read};
 use std::process::Command;
@@ -25,11 +26,8 @@ fn main() {
     Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let args: Vec<_> = env::args().collect();
-    assert!(
-        args.len() == 3,
-        "Usage: {} user password < tracks_file",
-        args[0]
-    );
+
+    maybe_info_and_exit(&args);
 
     let runtime = get_runtime();
     let session = get_session(&runtime, args[1].to_owned(), args[2].to_owned());
@@ -41,6 +39,13 @@ fn main() {
     track_id_list
         .iter()
         .for_each(|id| download_track(&runtime, &session, *id));
+}
+
+fn maybe_info_and_exit(args: &Vec<String>) {
+    if args.len() != 3 {
+        info!("Usage: oggify USER PASSWORD < TRACK_FILE");
+        process::exit(0);
+    }
 }
 
 fn get_runtime() -> Runtime {
