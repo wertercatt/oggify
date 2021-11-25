@@ -19,6 +19,7 @@ use librespot_core::session::Session;
 use librespot_core::spotify_id::SpotifyId;
 use librespot_metadata::{Album, Artist, FileFormat, Metadata, Playlist, Track};
 use regex::Regex;
+use tokio::runtime::Runtime;
 
 fn main() {
     Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -30,15 +31,8 @@ fn main() {
         args[0]
     );
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let session_config = SessionConfig::default();
-    let credentials = Credentials::with_password(args[1].to_owned(), args[2].to_owned());
-    info!("Connecting ...");
-    let session =
-        runtime
-            .block_on(Session::connect(session_config, credentials, None))
-            .unwrap();
-    info!("Connected!");
+    let runtime = get_runtime();
+    let session = get_session(&runtime, args[1].to_owned(), args[2].to_owned());
 
     let spotify_track_uri = Regex::new(r"spotify:track:([[:alnum:]]+)").unwrap();
     let spotify_track_url = Regex::new(r"open\.spotify\.com/track/([[:alnum:]]+)").unwrap();
@@ -179,6 +173,22 @@ fn main() {
                 .expect("Failed to tag file with vorbiscomment.");
         }
     });
+}
+
+fn get_runtime() -> Runtime {
+    Runtime::new().unwrap()
+}
+
+fn get_session(runtime: &Runtime, user: String, password: String) -> Session {
+    let session_config = SessionConfig::default();
+    let credentials = Credentials::with_password(user, password);
+    info!("Connecting ...");
+    let session =
+        runtime
+            .block_on(Session::connect(session_config, credentials, None))
+            .unwrap();
+    info!("Connected!");
+    session
 }
 
 fn clean_invalid_file_name_chars(name: &String) -> String {
