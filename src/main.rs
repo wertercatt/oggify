@@ -39,7 +39,12 @@ fn main() {
 
     track_id_list
         .iter()
-        .for_each(|id| download_track(&runtime, &session, *id));
+        .for_each(|id| {
+            match download_track(&runtime, &session, *id) {
+                Ok(value) => value,
+                Err(message) => warn!("{}", message)
+            };
+        });
 }
 
 fn maybe_info_and_exit(args: &Vec<String>) {
@@ -148,11 +153,12 @@ fn url_uri_to_track_id_list(
     track_id_list
 }
 
-fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) {
+fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result<(), String> {
     info!("Getting track {}...", id.to_base62());
-    let mut track = runtime
-        .block_on(Track::get(&session, id))
-        .expect("Cannot get track metadata");
+    let mut track =
+        runtime
+            .block_on(Track::get(&session, id))
+            .expect("Cannot get track metadata");
     if !track.available {
         warn!(
             "Track {} is not available, finding alternative...",
@@ -167,10 +173,15 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) {
                 false => None,
             }
         });
-        track = alt_track.expect(&format!(
-            "Could not find alternative for track {}",
-            id.to_base62()
-        ));
+        track = match alt_track {
+            Some(alt_track) => alt_track,
+            None => return Err(
+                format!(
+                    "Could not find alternative for track {}",
+                    id.to_base62()
+                )
+            )
+        };
         warn!(
             "Found track alternative {} -> {}",
             id.to_base62(),
@@ -227,6 +238,7 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) {
             .expect("Cannot get album metadata");
         tag_file(file_name, track.name, album.name, artists_strs.join(", "));
     }
+    Ok(())
 }
 
 fn tag_file(file_name: String, title: String, album: String, artists: String) {
