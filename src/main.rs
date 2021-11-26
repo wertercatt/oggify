@@ -97,52 +97,43 @@ fn url_uri_to_track_id_list(
     for (_index, line) in input_reader.lines().enumerate() {
         let line = line.unwrap();
 
-        let track_url_captures = spotify_track_url.captures(&line);
-        let track_uri_captures = spotify_track_uri.captures(&line);
-        let album_url_captures = spotify_album_url.captures(&line);
-        let album_uri_captures = spotify_album_uri.captures(&line);
-        let playlist_url_captures = spotify_playlist_url.captures(&line);
-        let playlist_uri_captures = spotify_playlist_uri.captures(&line);
-
-        if track_url_captures.is_some() {
-            let captures = track_url_captures.unwrap();
+        if let Some(captures) = spotify_track_url.captures(&line) {
             track_id_list.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
-        } else if track_uri_captures.is_some() {
-            let captures = track_uri_captures.unwrap();
+        } else if let Some(captures) = spotify_track_uri.captures(&line) {
             track_id_list.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
-        } else if album_url_captures.is_some() {
-            let captures = album_url_captures.unwrap();
+        } else if let Some(captures) = spotify_album_url.captures(&line) {
             let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let album = runtime
-                .block_on(Album::get(&session, album_id))
-                .expect("Cannot get album metadata.");
+            let album =
+                runtime
+                    .block_on(Album::get(&session, album_id))
+                    .expect("Cannot get album metadata.");
             for track_id in album.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
-        } else if album_uri_captures.is_some() {
-            let captures = album_uri_captures.unwrap();
+        } else if let Some(captures) = spotify_album_uri.captures(&line) {
             let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let album = runtime
-                .block_on(Album::get(&session, album_id))
-                .expect("Cannot get album metadata.");
+            let album =
+                runtime
+                    .block_on(Album::get(&session, album_id))
+                    .expect("Cannot get album metadata.");
             for track_id in album.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
-        } else if playlist_url_captures.is_some() {
-            let captures = playlist_url_captures.unwrap();
+        } else if let Some(captures) = spotify_playlist_url.captures(&line) {
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist = runtime
-                .block_on(Playlist::get(&session, playlist_id))
-                .expect("Cannot get playlist metadata.");
+            let playlist =
+                runtime
+                    .block_on(Playlist::get(&session, playlist_id))
+                    .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
-        } else if playlist_uri_captures.is_some() {
-            let captures = playlist_uri_captures.unwrap();
+        } else if let Some(captures) = spotify_playlist_uri.captures(&line) {
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist = runtime
-                .block_on(Playlist::get(&session, playlist_id))
-                .expect("Cannot get playlist metadata.");
+            let playlist =
+                runtime
+                    .block_on(Playlist::get(&session, playlist_id))
+                    .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
