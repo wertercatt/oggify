@@ -7,10 +7,10 @@ extern crate log;
 extern crate regex;
 extern crate tokio;
 
-use std::process;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
+use std::process;
 use std::process::Command;
 
 use env_logger::{Builder, Env};
@@ -37,14 +37,12 @@ fn main() {
 
     let track_id_list = url_uri_to_track_id_list(&runtime, &session, input_reader);
 
-    track_id_list
-        .iter()
-        .for_each(|id| {
-            match download_track(&runtime, &session, *id) {
-                Ok(value) => value,
-                Err(message) => warn!("{}", message)
-            };
-        });
+    track_id_list.iter().for_each(|id| {
+        match download_track(&runtime, &session, *id) {
+            Ok(value) => value,
+            Err(message) => warn!("{}", message),
+        };
+    });
 }
 
 fn maybe_info_and_exit(args: &Vec<String>) {
@@ -72,12 +70,12 @@ fn get_session(runtime: &Runtime, user: String, password: String) -> Session {
 fn get_file_reader(file_name: &String) -> BufReader<std::fs::File> {
     let some_file = File::open(file_name);
     match some_file {
-         Ok(file) => BufReader::new(file),
-         Err(_) => {
-             info!("File {} not found.", file_name);
-             process::exit(0);
-         }
-     }
+        Ok(file) => BufReader::new(file),
+        Err(_) => {
+            info!("File {} not found.", file_name);
+            process::exit(0);
+        }
+    }
 }
 
 fn url_uri_to_track_id_list(
@@ -103,37 +101,33 @@ fn url_uri_to_track_id_list(
             track_id_list.push(SpotifyId::from_base62(&captures[1]).ok().unwrap());
         } else if let Some(captures) = spotify_album_url.captures(&line) {
             let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let album =
-                runtime
-                    .block_on(Album::get(&session, album_id))
-                    .expect("Cannot get album metadata.");
+            let album = runtime
+                .block_on(Album::get(&session, album_id))
+                .expect("Cannot get album metadata.");
             for track_id in album.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
         } else if let Some(captures) = spotify_album_uri.captures(&line) {
             let album_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let album =
-                runtime
-                    .block_on(Album::get(&session, album_id))
-                    .expect("Cannot get album metadata.");
+            let album = runtime
+                .block_on(Album::get(&session, album_id))
+                .expect("Cannot get album metadata.");
             for track_id in album.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
         } else if let Some(captures) = spotify_playlist_url.captures(&line) {
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist =
-                runtime
-                    .block_on(Playlist::get(&session, playlist_id))
-                    .expect("Cannot get playlist metadata.");
+            let playlist = runtime
+                .block_on(Playlist::get(&session, playlist_id))
+                .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
         } else if let Some(captures) = spotify_playlist_uri.captures(&line) {
             let playlist_id: SpotifyId = SpotifyId::from_base62(&captures[1]).ok().unwrap();
-            let playlist =
-                runtime
-                    .block_on(Playlist::get(&session, playlist_id))
-                    .expect("Cannot get playlist metadata.");
+            let playlist = runtime
+                .block_on(Playlist::get(&session, playlist_id))
+                .expect("Cannot get playlist metadata.");
             for track_id in playlist.tracks.into_iter() {
                 track_id_list.push(track_id)
             }
@@ -146,10 +140,9 @@ fn url_uri_to_track_id_list(
 
 fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result<(), String> {
     info!("Getting track {}...", id.to_base62());
-    let mut track =
-        runtime
-            .block_on(Track::get(&session, id))
-            .expect("Cannot get track metadata");
+    let mut track = runtime
+        .block_on(Track::get(&session, id))
+        .expect("Cannot get track metadata");
     if !track.available {
         warn!(
             "Track {} is not available, finding alternative...",
@@ -166,12 +159,12 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result
         });
         track = match alt_track {
             Some(alt_track) => alt_track,
-            None => return Err(
-                format!(
+            None => {
+                return Err(format!(
                     "Could not find alternative for track {}",
                     id.to_base62()
-                )
-            )
+                ))
+            }
         };
         warn!(
             "Found track alternative {} -> {}",
@@ -222,7 +215,8 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result
         AudioDecrypt::new(key, &buffer[..])
             .read_to_end(&mut decrypted_buffer)
             .expect("Cannot decrypt stream");
-        std::fs::write(&file_name, &decrypted_buffer[0xa7..]).expect("Cannot write decrypted track");
+        std::fs::write(&file_name, &decrypted_buffer[0xa7..])
+            .expect("Cannot write decrypted track");
         info!("Filename: {}", file_name);
         let album = runtime
             .block_on(Album::get(&session, track.album))
