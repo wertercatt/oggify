@@ -144,7 +144,7 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result
         .block_on(Track::get(&session, id))
         .expect("Cannot get track metadata");
     if !track.available {
-        warn!(
+        info!(
             "Track {} is not available, finding alternative...",
             id.to_base62()
         );
@@ -166,7 +166,7 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result
                 ))
             }
         };
-        warn!(
+        info!(
             "Found track alternative {} -> {}",
             id.to_base62(),
             track.id.to_base62()
