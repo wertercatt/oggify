@@ -221,17 +221,18 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result
         let album = runtime
             .block_on(Album::get(&session, track.album))
             .expect("Cannot get album metadata");
-        tag_file(file_name, track.name, album.name, artists_strs.join(", "));
+        tag_file(file_name, track.name, album.name, artists_strs.join(", "), id.to_base62());
     }
     Ok(())
 }
 
-fn tag_file(file_name: String, title: String, album: String, artists: String) {
+fn tag_file(file_name: String, title: String, album: String, artists: String, spotify_id: String) {
     Command::new("vorbiscomment")
         .arg("--append")
         .args(["--tag", &format!("TITLE={}", title)])
         .args(["--tag", &format!("ALBUM={}", album)])
         .args(["--tag", &format!("ARTIST={}", artists)])
+        .args(["--tag", &format!("SPOTIFY_ID={}", spotify_id)])
         .arg(file_name)
         .spawn()
         .expect("Failed to tag file with vorbiscomment.");
