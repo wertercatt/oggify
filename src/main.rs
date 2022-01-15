@@ -191,8 +191,8 @@ fn download_track(runtime: &Runtime, session: &Session, id: SpotifyId) -> Result
             .collect::<Vec<_>>()
             .join(" ")
     );
-    let ok_artists_name = clean_invalid_file_name_chars(&artists_strs.join(", "));
-    let ok_track_name = clean_invalid_file_name_chars(&track.name);
+    let ok_artists_name = remove_restricted_file_name_chars(&artists_strs.join(", "));
+    let ok_track_name = remove_restricted_file_name_chars(&track.name);
     let file_name = format!("{} - {}.ogg", ok_artists_name, ok_track_name);
     if std::path::Path::new(&file_name).exists() {
         warn!("File \"{}\" already exists, download skipped.", file_name);
@@ -237,9 +237,8 @@ fn tag_file(file_name: String, title: String, album: String, artists: String) {
         .expect("Failed to tag file with vorbiscomment.");
 }
 
-fn clean_invalid_file_name_chars(name: &String) -> String {
-    let invalid_file_name_chars = r"[/]";
-    Regex::new(invalid_file_name_chars)
+fn remove_restricted_file_name_chars(name: &String) -> String {
+    Regex::new(r#"[\?\\\*":/<>|]"#)
         .unwrap()
         .replace_all(name.as_str(), "_")
         .into_owned()
