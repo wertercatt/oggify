@@ -4,7 +4,7 @@ Download Spotify tracks as Ogg Vorbis with a premium account.
 
 This library uses [librespot](https://github.com/librespot-org/librespot).
 
-The code is kind of ugly, it has been written by Rust newbies only 😁
+The code is kind of ugly, it has been written by Ferris newbies only 😁
 
 ## Usage
 
